@@ -1,44 +1,47 @@
 # thinklet-mcp
 
-> The MCP server that turns any AI into an on-demand app builder.
+> The MCP server that connects any AI to the Thinklet platform.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Protocol-MCP-blue)](https://modelcontextprotocol.io)
 [![Platform](https://img.shields.io/badge/Platform-Thinklet.io-blue)](https://thinklet.io)
+[![Browse](https://img.shields.io/badge/Browse-app.thinklet.io-blue)](https://app.thinklet.io)
 [![Works with Claude](https://img.shields.io/badge/Works%20with-Claude-orange)](https://claude.ai)
 [![Works with Copilot](https://img.shields.io/badge/Works%20with-Copilot-blue)](https://copilot.microsoft.com)
 
-`thinklet-mcp` gives Claude, Copilot, or any MCP-compatible AI three new abilities: **search** a shared catalog of AI-built interactive apps, **remix** the best match for a new context, and **publish** brand new apps in seconds.
+---
 
-**The loop:**
+## What is Thinklet?
+
+**Thinklet** is a platform for AI-built interactive apps — dashboards, trackers, calculators, tools, anything that runs in a browser.
+
+Your AI builds a Thinklet from a prompt, publishes it to a shared catalog with its own URL, and it's immediately available for anyone to use or remix. Every remix is saved — so every Thinklet has a full lineage you can explore, fork from, or run at any point in its history. Browse the catalog at [app.thinklet.io](https://app.thinklet.io), or connect your AI via MCP to build and discover Thinklets directly from a conversation.
+
+**`thinklet-mcp`** is the MCP server that gives Claude, Copilot, or any MCP-compatible AI four new tools: search the catalog, build new Thinklets, remix existing ones, and publish — all without leaving your conversation.
+
+---
+
+## The loop
 
 ```
 User asks for a tool
     ↓
-AI searches the Thinklet catalog  →  Found a match?  →  Remix it (seconds)
-    ↓ nothing matches                                         ↓
-AI builds a new Thinklet                             Rendered inline via MCP Apps
+discover_thinklets  →  match found?  →  remix_thinklet (seconds)
+    ↓ no match                                ↓
+Claude builds new Thinklet              Renders inline via MCP Apps
+    ↓                                         ↓
+publish_thinklet                        Lives at a real URL
+    ↓                                         ↓
+Indexed in catalog + lineage saved      Anyone can browse, use, fork
     ↓
-Published to the catalog
-    ↓
-Next person who asks finds it instantly
+Next person finds it instantly
 ```
-
-Every Thinklet built makes the catalog smarter.
-
----
-
-## What is a Thinklet?
-
-A Thinklet is a **browser-native interactive app** — a dashboard, tracker, calculator, form, or any UI — that runs without a backend, gets a real shareable URL, and renders directly inside AI conversations via [MCP Apps](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/).
 
 ---
 
 ## Install
 
-### Option A — npx (no install needed)
-
-Add this to your `claude_desktop_config.json`:
+### Option A — npx
 
 ```json
 {
@@ -61,12 +64,10 @@ Add this to your `claude_desktop_config.json`:
 ```bash
 git clone https://github.com/ChrisJDiMarco/thinklet-mcp
 cd thinklet-mcp
-npm install --include=dev
-npm run build
+npm install --include=dev && npm run build
 ```
 
-Then add to `claude_desktop_config.json`:
-
+Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -83,121 +84,80 @@ Then add to `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop. You'll see the Thinklet tools listed in the tools panel.
+Restart Claude Desktop. The Thinklet tools will appear in your tools panel.
 
 ---
 
 ## Tools
 
 ### `discover_thinklets`
-
-Search the catalog by natural language intent. **Always call this before building** — an existing Thinklet might already solve the need, saving time and enriching the catalog.
-
-```
-Input:  "habit tracker with streaks and heatmap"
-Output: 3 matching Thinklets with titles, descriptions, URLs, and match context
-```
+Search the catalog by natural language intent. **Always call this first** — something might already exist.
 
 ### `publish_thinklet`
-
-Publish a generated Thinklet to the platform. Returns a live URL and an inline embed that renders the app directly in the conversation window via MCP Apps.
-
-**Visibility options:**
-| Option | Behavior |
-|---|---|
-| `public` | Indexed in the catalog — any AI can discover and remix it |
-| `unlisted` | Real URL, accessible by link, not searchable |
-| `private` | Only accessible to you (requires account) |
-
-Claude will ask which you want before publishing. You're always in control.
+Publish a generated Thinklet. Asks for visibility before publishing:
+- **Public** — indexed in the catalog, any AI can discover and remix it
+- **Unlisted** — accessible by link, not searchable
+- **Private** — only you
 
 ### `remix_thinklet`
-
-Take an existing Thinklet and adapt it for a new context. Provide the original Thinklet ID and a description of what should change — the remix is built, published, and linked back to the original.
-
-```
-Input:  id="habit-tracker-pro", changes="rename to 'Training Log', add weight field, remove streak UI"
-Output: New Thinklet at its own URL, linked to original, published to catalog
-```
+Adapt an existing Thinklet for a new context. Provide the ID and what should change — the remix is published and linked to the original, preserving the lineage.
 
 ### `get_thinklet`
-
-Fetch and render a specific Thinklet by ID inline in the conversation.
+Fetch and render a specific Thinklet by ID, inline in the conversation.
 
 ---
 
 ## Prompts
 
 ### `build-thinklet`
-
-Invoke this prompt before writing any Thinklet code. It:
-
-1. Injects the complete [Thinklet builder skill](https://github.com/ChrisJDiMarco/thinklet-app-builder) — the exact props contract, TQL API, platform hooks, icon rules, serialization safety
-2. Guides Claude through the full loop: discover → build (or remix) → confirm visibility → publish
-3. Ensures the generated code deploys correctly on the first try
-
-Without this prompt, Claude gets the Thinklet architecture wrong ~88% of the time.
+Invoke before writing any Thinklet code. It injects the full [builder skill](https://github.com/ChrisJDiMarco/thinklet-app-builder) and guides Claude through the complete loop: discover → build or remix → confirm visibility → publish.
 
 ---
 
-## The publish consent flow
+## The remix lineage
 
-When Claude finishes building a Thinklet, it will ask before publishing:
+Every Thinklet published to the platform stores its remix history. At [app.thinklet.io](https://app.thinklet.io), each Thinklet shows a visual stack of cards behind it — every previous remix, in order, each one runnable. Fork from any point. Every version lives at its own URL. The full lineage is always preserved.
 
-```
-✅ Thinklet ready: "Agency Revenue Dashboard"
-
-Before I publish, how should this be visible?
-
-  🌐 Public    — indexed in the catalog, any AI can find and remix it
-  🔗 Unlisted  — shareable by link, not searchable
-  🔒 Private   — only you can access it
-
-Which would you like?
-```
-
-This protects sensitive data and gives you full control over what goes into the shared catalog.
-
----
-
-## Environment variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `THINKLET_API_URL` | Yes | Thinklet backend API base URL |
-| `THINKLET_API_KEY` | Yes | Your API key from thinklet.io |
-| `THINKLET_BASE_URL` | Yes | Base URL for Thinklet pages (e.g. `https://thinklet.io`) |
-
-Copy `.env.example` to `.env` for local development.
-
----
-
-## Backend API
-
-The `/api` folder contains FastAPI route templates for the three endpoints this server calls:
-
-| Route | Description |
-|---|---|
-| `POST /thinklets` | Publish a new Thinklet |
-| `GET /thinklets/search?q=...` | Semantic search |
-| `GET /thinklets/{id}` | Fetch by ID |
-| `POST /thinklets/{id}/remix` | Create a linked remix |
-
-These are stubs with clear TODO comments — wire them to your database (Supabase + pgvector recommended for semantic search).
+When you publish a remix via `remix_thinklet`, it's automatically linked to the original and tracked in the lineage chain.
 
 ---
 
 ## Compatibility
 
-Works with any MCP client that supports MCP Apps for inline rendering:
+| Client | Tools | Inline rendering |
+|---|---|---|
+| Claude Desktop | ✅ | ✅ (MCP Apps) |
+| VS Code + Copilot | ✅ | ✅ |
+| Goose | ✅ | ✅ |
+| ChatGPT Desktop | ✅ | ✅ |
+| Any MCP client | ✅ | varies |
 
-| Client | Status |
+---
+
+## Platform surfaces
+
+| Surface | What it is |
 |---|---|
-| Claude Desktop | ✅ Full support (inline rendering) |
-| VS Code + Copilot | ✅ Full support |
-| Goose | ✅ Full support |
-| ChatGPT Desktop | ✅ Full support |
-| Any MCP client | ✅ Tools work, rendering varies |
+| [app.thinklet.io](https://app.thinklet.io) | Browse the full catalog, view lineage stacks, use any Thinklet |
+| iPhone app | Coming soon |
+| Any URL | Every Thinklet has a shareable, embeddable link |
+| Claude / Copilot | Build and discover via this MCP server |
+
+---
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `THINKLET_API_URL` | Thinklet backend API base URL |
+| `THINKLET_API_KEY` | Your API key from thinklet.io |
+| `THINKLET_BASE_URL` | Base URL for Thinklet pages |
+
+---
+
+## Backend
+
+The `/api` folder has FastAPI route stubs for Abhi to wire up: publish, search, get, and remix endpoints with full TODO comments and recommended stack (Supabase + pgvector for semantic search).
 
 ---
 
@@ -206,37 +166,20 @@ Works with any MCP client that supports MCP Apps for inline rendering:
 ```
 thinklet-mcp/
 ├── src/
-│   ├── index.ts        ← MCP server (tools + prompts)
-│   ├── api.ts          ← Thinklet API client
-│   └── skill.ts        ← Condensed builder skill for prompt injection
+│   ├── index.ts     ← MCP server
+│   ├── api.ts       ← Thinklet API client
+│   └── skill.ts     ← Condensed builder skill for prompt injection
 ├── api/
-│   ├── models.py       ← Pydantic models (ThinkletCreate, ThinkletResponse)
-│   └── router.py       ← FastAPI route stubs for Abhi to wire up
+│   ├── models.py    ← Pydantic models
+│   └── router.py    ← FastAPI route stubs
 ├── .env.example
-├── package.json
-└── tsconfig.json
+└── package.json
 ```
-
----
-
-## Pair with the builder skill
-
-For standalone use (without the MCP server's auto-injection), install the [Thinklet App Builder skill](https://github.com/ChrisJDiMarco/thinklet-app-builder) separately. The skill is also what makes eval scores go from 12% → 100%.
-
----
-
-## Contributing
-
-PRs welcome. Highest-value contributions:
-- Improved semantic search query formatting
-- Additional Thinklet metadata fields (category, complexity, screenshot)
-- Support for batch publish
-- CLI tool for publishing from the command line
 
 ---
 
 ## Built by
 
-[Logic Out Loud LLC](https://thinklet.io) · Powered by Claude · For [Thinklet.io](https://thinklet.io)
+[Logic Out Loud LLC](https://thinklet.io) · [app.thinklet.io](https://app.thinklet.io) · Powered by Claude
 
-⭐ **If this clicks for you, a GitHub star helps a lot.**
+⭐ **If this clicks for you, a star helps a lot.**
