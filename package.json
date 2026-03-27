@@ -1,6 +1,6 @@
 {
   "name": "thinklet-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for creating, publishing, and discovering Thinklets — browser-native AI-powered micro-tools",
   "type": "module",
   "bin": {
