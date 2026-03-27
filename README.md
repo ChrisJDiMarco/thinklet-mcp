@@ -13,7 +13,9 @@
 
 ## What is Thinklet?
 
-**Thinklet** is a platform for AI-built interactive apps — dashboards, trackers, calculators, tools, anything that runs in a browser.
+**Thinklet** is a platform for AI-built interactive apps — anything from a simple interactive document to a full-scale React application. If it runs in a browser, it can be a Thinklet.
+
+Thinklets ship with built-in AI APIs for text generation, image generation, and AI video. Firecrawl (live web research) and Composio (1,000+ app integrations) are coming soon — meaning a Thinklet can call AI natively today, and will soon reach any API on the internet. The architecture scales from a 10-line calculator to a 70,000-line production application — still a single React file, still browser-native, still zero backend required.
 
 Your AI builds a Thinklet from a prompt, publishes it to a shared catalog with its own URL, and it's immediately available for anyone to use or remix. Every remix is saved — so every Thinklet has a full lineage you can explore, fork from, or run at any point in its history. Browse the catalog at [app.thinklet.io](https://app.thinklet.io), or connect your AI via MCP to build and discover Thinklets directly from a conversation.
 
@@ -119,6 +121,36 @@ Invoke before writing any Thinklet code. It injects the full [builder skill](htt
 Every Thinklet published to the platform stores its remix history. At [app.thinklet.io](https://app.thinklet.io), each Thinklet shows a visual stack of cards behind it — every previous remix, in order, each one runnable. Fork from any point. Every version lives at its own URL. The full lineage is always preserved.
 
 When you publish a remix via `remix_thinklet`, it's automatically linked to the original and tracked in the lineage chain.
+
+---
+
+## Claude Agent SDK
+
+`thinklet-mcp` is a first-class MCP integration for the [Claude Agent SDK](https://docs.claude.com/en/agent-sdk/overview).
+
+The Agent SDK handles the agentic loop — planning, tool calls, decisions. Thinklet handles what the agent produces: a persistent, shareable, remixable UI that lives at a real URL and can be discovered and built upon by the next agent or human. Together they're a complete stack: agents do the work, Thinklets surface the output.
+
+```python
+from claude_agent_sdk import query, ClaudeAgentOptions
+
+options = ClaudeAgentOptions(
+    mcp_servers={
+        "thinklet": {
+            "command": "npx",
+            "args": ["-y", "thinklet-mcp"],
+            "env": {"THINKLET_API_KEY": "your-key"}
+        }
+    }
+)
+
+async for message in query(
+    prompt="Build a revenue dashboard for a roofing company and publish it to Thinklet",
+    options=options
+):
+    print(message)
+```
+
+Every tool in this server — discover, build, remix, publish — is callable by an Agent SDK agent with no human in the loop. This is how the catalog grows autonomously: agents build tools, index them, and surface them for whoever needs them next.
 
 ---
 
