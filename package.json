@@ -1,0 +1,25 @@
+{
+  "name": "thinklet-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for creating, publishing, and discovering Thinklets — browser-native AI-powered micro-tools",
+  "type": "module",
+  "bin": {
+    "thinklet-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
