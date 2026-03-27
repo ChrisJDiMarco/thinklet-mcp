@@ -32,6 +32,30 @@ export interface PublishPayload {
   tags?: string[];
 }
 
+type ApiRecord = {
+  id: string;
+  title: string;
+  description: string;
+  tags?: string[];
+  url?: string;
+  embedUrl?: string;
+  createdAt?: string;
+  author?: string;
+};
+
+function normalise(data: ApiRecord): ThinkletMeta {
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    tags: data.tags ?? [],
+    url: data.url ?? `${BASE_URL}/t/${data.id}`,
+    embedUrl: data.embedUrl ?? `${BASE_URL}/embed/${data.id}`,
+    createdAt: data.createdAt ?? new Date().toISOString(),
+    author: data.author,
+  };
+}
+
 /** Publish a new Thinklet. Returns its metadata including URL. */
 export async function publishThinklet(payload: PublishPayload): Promise<ThinkletMeta> {
   const res = await fetch(`${API_URL}/api/v1/thinklets`, {
@@ -45,12 +69,8 @@ export async function publishThinklet(payload: PublishPayload): Promise<Thinklet
     throw new Error(`Thinklet publish failed (${res.status}): ${err}`);
   }
 
-  const data = await res.json();
-  return {
-    ...data,
-    url: data.url ?? `${BASE_URL}/t/${data.id}`,
-    embedUrl: data.embedUrl ?? `${BASE_URL}/embed/${data.id}`,
-  };
+  const data = (await res.json()) as ApiRecord;
+  return normalise(data);
 }
 
 /** Search published Thinklets by natural language query. */
@@ -65,13 +85,9 @@ export async function searchThinklets(query: string, limit = 5): Promise<Thinkle
     throw new Error(`Thinklet search failed (${res.status}): ${err}`);
   }
 
-  const data = await res.json();
-  const results: ThinkletMeta[] = data.results ?? data;
-  return results.map((t) => ({
-    ...t,
-    url: t.url ?? `${BASE_URL}/t/${t.id}`,
-    embedUrl: t.embedUrl ?? `${BASE_URL}/embed/${t.id}`,
-  }));
+  const data = (await res.json()) as { results?: ApiRecord[] } | ApiRecord[];
+  const records = Array.isArray(data) ? data : (data.results ?? []);
+  return records.map(normalise);
 }
 
 /** Get a single Thinklet by ID. */
@@ -85,10 +101,6 @@ export async function getThinklet(id: string): Promise<ThinkletMeta> {
     throw new Error(`Thinklet fetch failed (${res.status}): ${err}`);
   }
 
-  const data = await res.json();
-  return {
-    ...data,
-    url: data.url ?? `${BASE_URL}/t/${data.id}`,
-    embedUrl: data.embedUrl ?? `${BASE_URL}/embed/${data.id}`,
-  };
+  const data = (await res.json()) as ApiRecord;
+  return normalise(data);
 }
