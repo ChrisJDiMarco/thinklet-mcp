@@ -13,9 +13,25 @@
 
 ## What is Thinklet?
 
-**Thinklet** is a platform for AI-built interactive apps — anything from a simple interactive document to a full-scale React application. If it runs in a browser, it can be a Thinklet.
+**Thinklet** is a platform for AI-built interactive apps — anything from a simple calculator to a full-scale production application. If it runs in a browser, it can be a Thinklet.
 
-Thinklets ship with built-in AI APIs for text generation, image generation, and AI video. Firecrawl (live web research) and Composio (1,000+ app integrations) are coming soon — meaning a Thinklet can call AI natively today, and will soon reach any API on the internet. The architecture scales from a 10-line calculator to a 70,000-line production application — still a single React file, still browser-native, still zero backend required.
+Every Thinklet has two sides.
+
+**The front** is a single React component — the app itself, running entirely in the browser with no backend, no deployment, no setup.
+
+**The back** is a full per-app configuration layer, accessible via the settings panel. Every Thinklet ships with its own:
+
+- **AI Configuration** — system prompt, model selector, max tokens, temperature
+- **RAG Documents** — attach knowledge directly to the app
+- **Data Management** — inspect and manage the app's persisted state
+- **Lineage** — the full remix history for this specific Thinklet
+- **Versions** — every saved version, individually runnable
+- **Publications** — control visibility (public / unlisted / private)
+- **Integrations** — connect external services at the app level
+
+The single React file is the UI layer. The platform carries everything else.
+
+The architecture scales from a 10-line calculator to a 70,000-line production application — still a single file, still browser-native, still zero backend required. Thinklets ship with built-in AI APIs for text generation, image generation, and AI video. Firecrawl (live web research) and Composio (1,000+ app integrations) are coming soon.
 
 Your AI builds a Thinklet from a prompt, publishes it to a shared catalog with its own URL, and it's immediately available for anyone to use or remix. Every remix is saved — so every Thinklet has a full lineage you can explore, fork from, or run at any point in its history. Browse the catalog at [app.thinklet.io](https://app.thinklet.io), or connect your AI via MCP to build and discover Thinklets directly from a conversation.
 
@@ -27,15 +43,15 @@ Your AI builds a Thinklet from a prompt, publishes it to a shared catalog with i
 
 ```
 User asks for a tool
-    ↓
-discover_thinklets  →  match found?  →  remix_thinklet (seconds)
-    ↓ no match                                ↓
-Claude builds new Thinklet              Renders inline via MCP Apps
-    ↓                                         ↓
-publish_thinklet                        Lives at a real URL
-    ↓                                         ↓
-Indexed in catalog + lineage saved      Anyone can browse, use, fork
-    ↓
+        ↓
+discover_thinklets → match found? → remix_thinklet (seconds)
+        ↓ no match                          ↓
+Claude builds new Thinklet        Renders inline via MCP Apps
+        ↓                                   ↓
+publish_thinklet               Lives at a real URL
+        ↓                                   ↓
+Indexed in catalog + lineage saved   Anyone can browse, use, fork
+        ↓
 Next person finds it instantly
 ```
 
@@ -118,7 +134,12 @@ Invoke before writing any Thinklet code. It injects the full [builder skill](htt
 
 ## The remix lineage
 
-Every Thinklet published to the platform stores its remix history. At [app.thinklet.io](https://app.thinklet.io), each Thinklet shows a visual stack of cards behind it — every previous remix, in order, each one runnable. Fork from any point. Every version lives at its own URL. The full lineage is always preserved.
+Every Thinklet published to the platform stores its full remix history. At [app.thinklet.io](https://app.thinklet.io), each Thinklet shows a visual indicator on its left edge:
+
+- **Dotted border** — this Thinklet hasn't been remixed yet
+- **Solid color** — it has remixes; click to open a modal showing the full remix stack, each version individually runnable
+
+Fork from any point. Every version lives at its own URL. The full lineage is always preserved.
 
 When you publish a remix via `remix_thinklet`, it's automatically linked to the original and tracked in the lineage chain.
 
@@ -128,7 +149,7 @@ When you publish a remix via `remix_thinklet`, it's automatically linked to the 
 
 `thinklet-mcp` is a first-class MCP integration for the [Claude Agent SDK](https://docs.claude.com/en/agent-sdk/overview).
 
-The Agent SDK handles the agentic loop — planning, tool calls, decisions. Thinklet handles what the agent produces: a persistent, shareable, remixable UI that lives at a real URL and can be discovered and built upon by the next agent or human. Together they're a complete stack: agents do the work, Thinklets surface the output.
+The Agent SDK handles the agentic loop — planning, tool calls, decisions. Thinklet handles what the agent produces: a persistent, shareable, remixable app with its own AI configuration, knowledge base, and lineage — living at a real URL, discoverable by the next agent or human. Together they're a complete stack: agents do the work, Thinklets surface the output.
 
 ```python
 from claude_agent_sdk import query, ClaudeAgentOptions
@@ -170,7 +191,7 @@ Every tool in this server — discover, build, remix, publish — is callable by
 
 | Surface | What it is |
 |---|---|
-| [app.thinklet.io](https://app.thinklet.io) | Browse the full catalog, view lineage stacks, use any Thinklet |
+| [app.thinklet.io](https://app.thinklet.io) | Browse the full catalog, configure any Thinklet, view lineage stacks |
 | iPhone app | Coming soon |
 | Any URL | Every Thinklet has a shareable, embeddable link |
 | Claude / Copilot | Build and discover via this MCP server |
@@ -189,7 +210,7 @@ Every tool in this server — discover, build, remix, publish — is callable by
 
 ## Backend
 
-The `/api` folder has FastAPI route stubs for Abhi to wire up: publish, search, get, and remix endpoints with full TODO comments and recommended stack (Supabase + pgvector for semantic search).
+The `/api` folder has FastAPI route stubs for the backend to wire up: publish, search, get, and remix endpoints with full TODO comments and recommended stack (Supabase + pgvector for semantic search).
 
 ---
 
@@ -198,12 +219,12 @@ The `/api` folder has FastAPI route stubs for Abhi to wire up: publish, search, 
 ```
 thinklet-mcp/
 ├── src/
-│   ├── index.ts     ← MCP server
-│   ├── api.ts       ← Thinklet API client
-│   └── skill.ts     ← Condensed builder skill for prompt injection
+│   ├── index.ts        ← MCP server
+│   ├── api.ts          ← Thinklet API client
+│   └── skill.ts        ← Condensed builder skill for prompt injection
 ├── api/
-│   ├── models.py    ← Pydantic models
-│   └── router.py    ← FastAPI route stubs
+│   ├── models.py       ← Pydantic models
+│   └── router.py       ← FastAPI route stubs
 ├── .env.example
 └── package.json
 ```
