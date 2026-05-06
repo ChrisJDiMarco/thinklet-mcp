@@ -16,6 +16,77 @@ const rootEl = document.getElementById("root") as HTMLDivElement;
 const loading = document.getElementById("loading") as HTMLDivElement;
 const errorEl = document.getElementById("error") as HTMLDivElement;
 
+// ─── Day 1 Inline-Shim Feasibility Spike ───────────────────────────────────
+// Toggle to true (and rebuild) to re-run feasibility checks. All three checks
+// passed on 2026-05-05 against prod api.thinklet.io after CORS deploy.
+// Kept in source for future re-verification if Claude Desktop CSP changes.
+const SPIKE_ENABLED = false;
+
+async function runSpike() {
+  console.log("%c[spike] === Day 1 inline-shim feasibility checks ===", "font-weight:bold");
+  console.log("[spike] host:", location.href);
+  console.log("[spike] origin:", location.origin);
+
+  // Check 1 — connect-src to api.thinklet.io
+  try {
+    const r = await fetch("https://api.thinklet.io/health", { method: "GET" });
+    console.log(`%c[spike] 1/3 connect-src api.thinklet.io: PASS (status=${r.status})`, "color:green");
+  } catch (e) {
+    console.error("%c[spike] 1/3 connect-src api.thinklet.io: FAIL", "color:red", e);
+  }
+
+  // Check 2 — SSE / streaming response body
+  try {
+    const r = await fetch("https://api.thinklet.io/ai/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "spike-test" }),
+    });
+    if (!r.body) {
+      console.error("%c[spike] 2/3 SSE: FAIL (response.body is null — streaming blocked)", "color:red");
+    } else {
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let chunks = 0;
+      let firstChunk = "";
+      const startedAt = performance.now();
+      while (chunks < 3) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (chunks === 0) firstChunk = dec.decode(value).slice(0, 80);
+        chunks++;
+        if (performance.now() - startedAt > 5000) break; // safety
+      }
+      reader.cancel().catch(() => {});
+      console.log(
+        `%c[spike] 2/3 SSE: PASS (status=${r.status}, chunks=${chunks}, first="${firstChunk}")`,
+        "color:green",
+      );
+    }
+  } catch (e) {
+    console.error("%c[spike] 2/3 SSE: FAIL", "color:red", e);
+  }
+
+  // Check 3 — script-src dynamic import from esm.sh
+  try {
+    // @ts-expect-error dynamic URL import not in TS module graph
+    const m: any = await import(/* @vite-ignore */ "https://esm.sh/marked@12");
+    const ok = typeof m?.marked === "function" || typeof m?.default === "function";
+    console.log(
+      `%c[spike] 3/3 esm.sh dynamic import: ${ok ? "PASS" : "PARTIAL"} (keys=${Object.keys(m || {}).join(",")})`,
+      `color:${ok ? "green" : "orange"}`,
+    );
+  } catch (e) {
+    console.error("%c[spike] 3/3 esm.sh dynamic import: FAIL", "color:red", e);
+  }
+
+  console.log("%c[spike] === done — screenshot the three lines above ===", "font-weight:bold");
+}
+
+if (SPIKE_ENABLED) {
+  runSpike().catch((e) => console.error("[spike] uncaught", e));
+}
+
 // Track app URL across render attempts so runtime failures can fall back cleanly.
 let currentAppUrl: string | null = null;
 
@@ -30,6 +101,70 @@ function showError(msg: string) {
   resetView();
   errorEl.textContent = msg;
   errorEl.style.display = "flex";
+}
+
+function showEmbed(embedUrl: string, fallbackAppUrl?: string) {
+  console.log("%c[viewer:embed] showEmbed() entered", "color:#0ea5e9", { embedUrl, fallbackAppUrl });
+  resetView();
+
+  const frame = document.createElement("iframe");
+  frame.src = embedUrl;
+  frame.style.display = "block";
+  frame.style.width = "100%";
+  frame.style.height = "100%";
+  frame.style.minHeight = "480px";
+  frame.style.border = "0";
+  frame.allow = "clipboard-read; clipboard-write; fullscreen";
+  frame.referrerPolicy = "no-referrer";
+
+  let resolved = false;
+  const onLoadFail = (reason: string) => {
+    if (resolved) return;
+    resolved = true;
+    console.warn("%c[viewer:embed] load failed → fallback", "color:#ef4444", { reason });
+    if (fallbackAppUrl) {
+      showFallback(
+        "Open in Thinklet",
+        "Inline preview could not load. Open in Thinklet for the full experience.",
+        fallbackAppUrl,
+      );
+    } else {
+      showError("Embed failed to load.");
+    }
+  };
+
+  frame.addEventListener("error", (e) => {
+    console.error("[viewer:embed] iframe error event", e);
+    onLoadFail("error-event");
+  });
+  const watchdog = window.setTimeout(() => onLoadFail("watchdog-8s"), 8000);
+  frame.addEventListener("load", () => {
+    if (resolved) return;
+    resolved = true;
+    console.log("%c[viewer:embed] iframe load fired", "color:#22c55e", {
+      readyState: frame.contentDocument?.readyState ?? "(cross-origin)",
+    });
+    window.clearTimeout(watchdog);
+  });
+
+  loading.style.display = "none";
+  rootEl.style.display = "block";
+  rootEl.innerHTML = "";
+  rootEl.appendChild(frame);
+  console.log("%c[viewer:embed] iframe appended to #root", "color:#0ea5e9", {
+    rootChildren: rootEl.childElementCount,
+    rootDisplay: getComputedStyle(rootEl).display,
+    rootRect: rootEl.getBoundingClientRect(),
+    frameRect: frame.getBoundingClientRect(),
+  });
+  // Re-check 100ms later in case Claude's host swaps DOM after our render.
+  window.setTimeout(() => {
+    const stillThere = document.getElementById("root")?.querySelector("iframe");
+    console.log("%c[viewer:embed] +100ms: iframe still in DOM?", "color:#0ea5e9", {
+      stillThere: !!stillThere,
+      iframeCount: document.querySelectorAll("iframe").length,
+    });
+  }, 100);
 }
 
 function showFallback(title: string, msg: string, appUrl?: string) {
@@ -357,34 +492,53 @@ const app = new App({ name: "Thinklet Viewer", version: "0.5.0" });
 
 app.ontoolresult = (result) => {
   const data = result as Record<string, unknown>;
-  const sc = data.structuredContent as { code?: string; appUrl?: string } | undefined;
+  const sc = data.structuredContent as
+    | { code?: string; appUrl?: string; embedUrl?: string }
+    | undefined;
   const appUrl = extractAppUrl(data) ?? sc?.appUrl ?? undefined;
+  const embedUrl = sc?.embedUrl ?? undefined;
+  const platformDeps = sc?.code ? hasPlatformDependencies(sc.code) : false;
 
   console.log("[viewer] has code:", !!sc?.code);
   console.log("[viewer] has appUrl:", !!appUrl);
-  console.log("[viewer] platform deps:", sc?.code ? hasPlatformDependencies(sc.code) : "n/a");
+  console.log("[viewer] has embedUrl:", !!embedUrl);
+  console.log("[viewer] platform deps:", sc?.code ? platformDeps : "n/a");
 
-  console.log("[viewer] path taken:", 
-    sc?.code && !hasPlatformDependencies(sc.code) ? "flat" :
-    sc?.code && hasPlatformDependencies(sc.code) ? "fallback-app-url" :
+  // ─── Path selection ────────────────────────────────────────────────────
+  // The iframe-embed path (loading content.thinklet.io inside Claude's
+  // webview) is currently disabled because Claude Desktop's host CSP does
+  // not honor `_meta.ui.csp.frameDomains` — `frame-src` stays at
+  // `'self' blob: data:` regardless of what we declare. Confirmed
+  // 2026-05-06 with both config-level and content-item-level placements.
+  // The `showEmbed` helper and embedUrl plumbing are kept intact so we can
+  // flip back on quickly when Anthropic fixes frameDomains.
+  const path =
+    sc?.code && !platformDeps ? "flat" :
+    platformDeps ? "fallback-app-url" :
     appUrl ? "fallback-app-url" :
-    sc?.code ? "flat-last-resort" : "no-preview"
-  );
+    sc?.code ? "flat-last-resort" :
+    "no-preview";
+  console.log("[viewer] path taken:", path);
 
-  if (sc?.code && !hasPlatformDependencies(sc.code)) {
+  // 1. Simple thinklets (no platform deps) → flat inline render.
+  if (sc?.code && !platformDeps) {
     renderThinklet(sc.code, appUrl);
     return;
   }
 
-  if (sc?.code && hasPlatformDependencies(sc.code)) {
+  // 2. Complex thinklets (platform deps) → CTA banner. We deliberately do
+  //    NOT try the iframe path: the host CSP blocks it, the iframe loads
+  //    `about:blank`, and `load` fires anyway, leaving a white screen.
+  if (platformDeps) {
     showFallback(
       "Open in Thinklet",
-      "This thinklet uses platform services that are not available inline yet.",
+      "This thinklet uses platform services. Open in Thinklet to use it.",
       appUrl,
     );
     return;
   }
 
+  // 3. No code but an app URL → CTA.
   if (appUrl) {
     showFallback(
       "Open in Thinklet",
@@ -394,6 +548,7 @@ app.ontoolresult = (result) => {
     return;
   }
 
+  // 4. Code present but earlier branches didn't catch it → last-resort flat.
   if (sc?.code) {
     renderThinklet(sc.code, appUrl);
     return;

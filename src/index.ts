@@ -38,6 +38,8 @@ import {
   buildAppUrl,
   fixThinklet,
   setVisibility,
+  fetchAccess,
+  buildEmbedUrl,
   type ThinkletMeta,
   type SkillMode,
 } from "./api.js";
@@ -70,6 +72,24 @@ try {
   viewerHtml = "<html><body><p>Viewer not built. Run npm run build:ui.</p></body></html>";
 }
 
+// CSP allowlist for the viewer webview. Mirrored on both the resource config
+// _meta (third arg of registerAppResource) AND the content item _meta because
+// the SDK examples place it on the content item, but Claude Desktop has been
+// observed honoring connectDomains from the config-level _meta. Putting it in
+// both locations is harmless (same schema both places) and lets us probe
+// whether frame-src enforcement requires the content-item placement.
+const VIEWER_CSP = {
+  frameDomains: [contentOrigin, "https://content.thinklet.io"],
+  connectDomains: [
+    contentOrigin,
+    "https://content.thinklet.io",
+    "https://api.thinklet.io",
+    "https://esm.sh",
+    "https://cdn.esm.sh",
+  ],
+  resourceDomains: ["https://esm.sh", "https://cdn.esm.sh"],
+};
+
 registerAppResource(
   server,
   "Thinklet Viewer",
@@ -77,11 +97,7 @@ registerAppResource(
   {
     _meta: {
       ui: {
-        csp: {
-          frameDomains: [contentOrigin],
-          connectDomains: [contentOrigin],
-          resourceDomains: ["https://esm.sh", "https://cdn.esm.sh"],
-        },
+        csp: VIEWER_CSP,
       },
     },
   },
@@ -91,7 +107,11 @@ registerAppResource(
         uri: VIEWER_RESOURCE_URI,
         mimeType: RESOURCE_MIME_TYPE,
         text: viewerHtml,
-
+        _meta: {
+          ui: {
+            csp: VIEWER_CSP,
+          },
+        },
       },
     ],
   }),
@@ -153,12 +173,14 @@ function appLink(meta: ThinkletMeta): string {
 function buildToolResult(
   text: string,
   appUrl: string,
-  code?: string
+  code?: string,
+  embedUrl?: string
 ): { content: ContentBlock[]; structuredContent?: Record<string, unknown> } {
   const content: ContentBlock[] = [{ type: "text", text }];
   const result: { content: ContentBlock[]; structuredContent?: Record<string, unknown> } = { content };
   const sc: Record<string, unknown> = { appUrl };
   if (code) sc.code = code;
+  if (embedUrl) sc.embedUrl = embedUrl;
   if (Object.keys(sc).length > 0) {
     result.structuredContent = sc;
   }
@@ -738,6 +760,22 @@ registerAppTool(
       const thinkletCode = await getThinkletCode(id).catch(() => "");
       const url = resolveAppUrl(meta);
 
+      // Mint embed token (best-effort — used only by the iframe fallback path
+      // for thinklets with platform deps; flat render works without it).
+      const embedUrl = await fetchAccess(id)
+        .then((access) => buildEmbedUrl(access.contentApiToken))
+        .catch((err) => {
+          process.stderr.write(
+            `[thinklet-mcp] embed mint failed for ${id}: ${
+              err instanceof Error ? err.message : String(err)
+            }\n`,
+          );
+          return undefined;
+        });
+      if (embedUrl) {
+        process.stderr.write(`[thinklet-mcp] embed ready for ${id}: ${embedUrl}\n`);
+      }
+
       let codeText = "";
       if (includeCode && thinkletCode) {
         codeText = `\n\n---\n\n**Source code:**\n\`\`\`jsx\n${thinkletCode}\n\`\`\``;
@@ -762,6 +800,7 @@ registerAppTool(
         lines.filter(Boolean).join("\n"),
         url,
         thinkletCode || undefined,
+        embedUrl,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
