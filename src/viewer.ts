@@ -211,7 +211,13 @@ function showFallback(title: string, msg: string, appUrl?: string) {
     button.style.fontWeight = "600";
     button.style.cursor = "pointer";
     button.onclick = () => {
-      window.open(appUrl, "_blank", "noopener,noreferrer");
+      // app.openLink() is the correct way to open URLs from a sandboxed MCP App
+      // iframe — window.open() is blocked by the sandbox. openLink() sends a
+      // message to Claude Desktop which opens the URL in the system browser.
+      app.openLink({ url: appUrl }).catch(() => {
+        // fallback: if openLink isn't available yet, try window.open anyway
+        window.open(appUrl, "_blank", "noopener,noreferrer");
+      });
     };
     card.appendChild(button);
   }

@@ -11,7 +11,9 @@
     "build:server": "tsc",
     "build": "npm run build:ui && npm run build:server",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "dev:http": "MCP_TRANSPORT=http tsx src/index.ts",
+    "start": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT=http node dist/index.js"
   },
   "files": [
     "dist",

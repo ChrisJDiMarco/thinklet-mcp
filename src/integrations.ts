@@ -24,7 +24,7 @@ export const INTEGRATIONS: Integration[] = [
     name: "AI Streaming",
     category: "AI",
     description:
-      "Stream LLM responses into the UI in real-time. Chat interfaces, content generation, summarization.",
+      "Stream LLM responses into the UI in real-time. Chat interfaces, content generation, summarization. Optional models: sonar (Perplexity web search), sonar-pro (deeper research). Omit model for platform default.",
     triggers: [
       "AI",
       "chat",
@@ -105,10 +105,10 @@ const { content, isStreaming, error, isComplete, streamContent, cancelStream, re
   // ─── Image ──────────────────────────────────────────────────────────────
   {
     id: "image-generation",
-    name: "Image Generation",
+    name: "Image Generation (Gemini)",
     category: "Media",
     description:
-      "Generate images from text prompts, transform/edit uploaded images, analyze image content via AI.",
+      "Generate images from text prompts, transform/edit uploaded images, analyze image content via AI. Two models: gemini-3-pro-image (default, best quality) or gemini-3.1-flash-image (faster, lower cost).",
     triggers: [
       "image",
       "generate image",
@@ -160,17 +160,25 @@ const { mutate: transform, data: result } = useMutation({
 ### API Reference
 
 \`\`\`typescript
-aiApi.generateImage({ prompt: string }) // Returns: string (CDN URL)
+aiApi.generateImage({
+  prompt: string,
+  model?: "gemini-3-pro-image" | "gemini-3.1-flash-image", // Default: gemini-3-pro-image
+}) // Returns: string (CDN URL)
+
 aiApi.analyzeImage({
   imageUrl: string,              // Required
   prompt?: string,
   generateImage?: boolean,       // Default true
   includeAnalysis?: boolean,     // Default false
-  model?: string,
+  model?: "gemini-3-pro-image" | "gemini-3.1-flash-image", // Default: gemini-3-pro-image
   resolution?: string,           // "1K" | "2K" | "4K"
   quality?: string,              // "standard" | "hd"
 })
 \`\`\`
+
+### Models
+- \`gemini-3-pro-image\` — default, best quality
+- \`gemini-3.1-flash-image\` — faster and lower cost, use when user asks for speed or cost savings
 
 ### Rules
 - User action required (button click)
@@ -182,10 +190,10 @@ aiApi.analyzeImage({
   // ─── Video ──────────────────────────────────────────────────────────────
   {
     id: "video-generation",
-    name: "Video Generation",
+    name: "Video Generation (Kling)",
     category: "Media",
     description:
-      "Generate AI videos from text prompts. Standard or pro quality, 5s or 10s duration.",
+      "Generate AI videos from text prompts using Kling. Standard or pro quality, 5s or 10s duration.",
     triggers: [
       "video",
       "generate video",
@@ -256,10 +264,10 @@ generateVideo({
   // ─── Web Scraping ──────────────────────────────────────────────────────
   {
     id: "web-scraping",
-    name: "Web Scraping",
+    name: "Web Scraping (Firecrawl)",
     category: "Data",
     description:
-      "Extract clean markdown content from any public web page. Summarize, analyze, or display web content.",
+      "Extract clean markdown content from any public web page using Firecrawl. Summarize, analyze, or display web content.",
     triggers: [
       "scrape",
       "web",
@@ -319,7 +327,7 @@ const { mutate: scrapeAndSummarize } = useMutation({
   // ─── Audio ──────────────────────────────────────────────────────────────
   {
     id: "audio-generation",
-    name: "Text to Speech",
+    name: "Text to Speech (ElevenLabs)",
     category: "Media",
     description:
       "Generate speech audio from text using ElevenLabs. Single voice or multi-voice podcast/dialogue.",
@@ -404,7 +412,7 @@ Punctuation: \`...\` (pauses), \`CAPS\` (emphasis), \`!\` \`?\` (intonation)
   // ─── Perplexity Research ───────────────────────────────────────────────
   {
     id: "perplexity-research",
-    name: "Perplexity Research",
+    name: "AI Research (Perplexity)",
     category: "AI",
     description:
       "AI-powered deep research and web search via Perplexity models (sonar, sonar-pro).",

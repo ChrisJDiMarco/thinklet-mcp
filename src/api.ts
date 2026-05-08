@@ -1,29 +1,31 @@
 /**
- * Thinklet API client — aligned with the real backend MCP endpoints.
+ * Thinklet API client.
  *
- * All calls go to /mcp/thinklets (API-key auth), with API_URL optionally
- * including an upstream prefix (e.g. https://api.example.com/api/v1).
+ * ApiClient is instantiated per-session (HTTP mode) or once at startup (stdio mode),
+ * holding the API key for that user. All network calls are instance methods so the
+ * key is never a global.
  */
 
 const API_URL = process.env.THINKLET_API_URL ?? "https://api.thinklet.io";
-const API_KEY = process.env.THINKLET_API_KEY ?? "";
 const CONTENT_BASE_URL =
   process.env.THINKLET_CONTENT_URL ?? "https://content.thinklet.io";
 const APP_BASE_URL = (
-  process.env.THINKLET_APP_URL ?? "http://localhost:3000"
+  process.env.THINKLET_APP_URL ?? "https://app.thinklet.io"
 ).replace(/\/+$/, "");
-const MCP_BASE = `${API_URL}/mcp`;
 
-function headers() {
-  return {
-    "Content-Type": "application/json",
-    ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
-  };
+// ─── Sentinel error ────────────────────────────────────────────────────────
+
+export class AuthError extends Error {
+  constructor() {
+    super("missing_or_invalid_api_key");
+    this.name = "AuthError";
+  }
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type Visibility = "public" | "private";
+export type SkillMode = "create" | "edit";
 
 export interface ThinkletMeta {
   id: string;
@@ -45,49 +47,6 @@ export interface AccessData {
   expiresIn: number;
 }
 
-interface ApiRecord {
-  id: string;
-  title: string;
-  description: string;
-  tags?: string[];
-  visibility?: string;
-  createdAt?: string;
-  created_at?: string;
-  platformUrl?: string;
-  platform_url?: string;
-  thumbnailUrl?: string;
-  publicationId?: string;
-  publication_id?: string;
-  score?: number;
-}
-
-function normalise(data: ApiRecord): ThinkletMeta {
-  return {
-    id: data.id,
-    title: data.title,
-    description: data.description,
-    tags: data.tags ?? [],
-    visibility: (data.visibility as Visibility) ?? "private",
-    createdAt: data.createdAt ?? data.created_at ?? new Date().toISOString(),
-    platformUrl: data.platformUrl ?? data.platform_url,
-    thumbnailUrl: data.thumbnailUrl,
-    publicationId: data.publicationId ?? data.publication_id,
-    score: data.score,
-  };
-}
-
-/** Unwrap the backend's { data: ... } envelope. */
-async function unwrap<T>(res: Response, label: string): Promise<T> {
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`${label} failed (${res.status}): ${err}`);
-  }
-  const json = (await res.json()) as Record<string, unknown>;
-  return ((json.data as T) ?? json) as T;
-}
-
-// ─── create / patch thinklet ───────────────────────────────────────────────
-
 export interface CreatePayload {
   code: string;
   title: string;
@@ -105,187 +64,201 @@ export interface PatchPayload {
   integrations?: string[];
 }
 
-export async function createThinklet(
-  payload: CreatePayload
-): Promise<ThinkletMeta> {
-  const res = await fetch(`${MCP_BASE}/thinklets`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({
-      code: payload.code,
-      title: payload.title,
-      description: payload.description,
-      tags: payload.tags ?? [],
-      integrations: payload.integrations ?? [],
-    }),
-  });
-  return normalise(await unwrap<ApiRecord>(res, "Thinklet create"));
+interface ApiRecord {
+  id: string;
+  title: string;
+  description: string;
+  tags?: string[];
+  visibility?: string;
+  createdAt?: string;
+  created_at?: string;
+  platformUrl?: string;
+  platform_url?: string;
+  thumbnailUrl?: string;
+  publicationId?: string;
+  publication_id?: string;
+  score?: number;
 }
-
-export async function patchThinklet(
-  payload: PatchPayload
-): Promise<ThinkletMeta> {
-  const res = await fetch(`${MCP_BASE}/thinklets`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({
-      code: payload.code,
-      patchedFromId: payload.patchedFromId,
-      title: payload.title,
-      description: payload.description,
-      tags: payload.tags,
-      integrations: payload.integrations,
-    }),
-  });
-  return normalise(await unwrap<ApiRecord>(res, "Thinklet patch"));
-}
-
-// ─── get thinklet ──────────────────────────────────────────────────────────
-
-export async function getThinklet(id: string): Promise<ThinkletMeta> {
-  const res = await fetch(`${MCP_BASE}/thinklets/${id}`, {
-    headers: headers(),
-  });
-  return normalise(await unwrap<ApiRecord>(res, "Thinklet fetch"));
-}
-
-// ─── get code ──────────────────────────────────────────────────────────────
-
-export async function getThinkletCode(id: string): Promise<string> {
-  const res = await fetch(`${MCP_BASE}/thinklets/${id}/code`, {
-    headers: headers(),
-  });
-  const data = await unwrap<{ code: string }>(res, "Thinklet code fetch");
-  return data.code;
-}
-
-// ─── search ────────────────────────────────────────────────────────────────
-
-export async function searchThinklets(
-  query: string,
-  limit = 5,
-  includePrivate = true
-): Promise<ThinkletMeta[]> {
-  const params = new URLSearchParams({
-    q: query,
-    limit: String(limit),
-    includePrivate: String(includePrivate),
-  });
-  const res = await fetch(
-    `${MCP_BASE}/thinklets/search?${params}`,
-    { headers: headers() }
-  );
-  const data = await unwrap<{ results?: ApiRecord[] } | ApiRecord[]>(
-    res,
-    "Thinklet search"
-  );
-  const records = Array.isArray(data) ? data : (data.results ?? []);
-  return records.map(normalise);
-}
-
-// ─── access (signed URL + JWT for embed) ───────────────────────────────────
-
-export async function fetchAccess(
-  id: string,
-  signal?: AbortSignal
-): Promise<AccessData> {
-  const res = await fetch(`${MCP_BASE}/thinklets/${id}/access`, {
-    headers: headers(),
-    signal,
-  });
-  return unwrap<AccessData>(res, "Thinklet access");
-}
-
-/** Build the embed URL for rendering inside Claude Desktop via MCP Apps. */
-export function buildEmbedUrl(token: string): string {
-  return `${CONTENT_BASE_URL}/embed/mcp?token=${encodeURIComponent(token)}`;
-}
-
-// ─── fix thinklet (patch code on existing) ─────────────────────────────────
-
-export async function fixThinklet(
-  id: string,
-  code: string,
-  title?: string,
-  description?: string,
-  tags?: string[],
-  integrations?: string[]
-): Promise<ThinkletMeta> {
-  return patchThinklet({
-    patchedFromId: id,
-    code,
-    title,
-    description,
-    tags,
-    integrations,
-  });
-}
-
-// ─── skill (editor prompt library, served per-mode) ───────────────────────
-
-export type SkillMode = "create" | "edit";
 
 type SkillCacheEntry = { text: string; fetchedAt: number };
-const SKILL_TTL_MS = 60 * 60 * 1000; // 1h — editor prompt files change rarely
-const skillCache: Record<SkillMode, SkillCacheEntry | undefined> = {
-  create: undefined,
-  edit: undefined,
-};
+const SKILL_TTL_MS = 60 * 60 * 1000;
 
-/**
- * Fetch the editor's prompt library for the given mode. Falls back to throwing
- * so callers can decide whether to use their offline fallback text.
- */
-export async function fetchSkill(mode: SkillMode): Promise<string> {
-  const cached = skillCache[mode];
-  if (cached && Date.now() - cached.fetchedAt < SKILL_TTL_MS) {
-    return cached.text;
+// ─── Client ────────────────────────────────────────────────────────────────
+
+export class ApiClient {
+  private readonly apiKey: string;
+  private readonly mcpBase: string;
+  private readonly appBaseUrl: string;
+  private readonly contentBaseUrl: string;
+  private readonly skillCache: Record<SkillMode, SkillCacheEntry | undefined> =
+    { create: undefined, edit: undefined };
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+    this.mcpBase = `${API_URL}/mcp`;
+    this.appBaseUrl = APP_BASE_URL;
+    this.contentBaseUrl = CONTENT_BASE_URL;
   }
 
-  const res = await fetch(`${MCP_BASE}/skill?mode=${mode}`, {
-    headers: headers(),
-  });
-  const data = await unwrap<{ skill: string; mode: string }>(res, "Skill fetch");
-  const text = (data.skill ?? "").trim();
-  if (!text) {
-    throw new Error("empty skill payload");
+  private headers() {
+    return {
+      "Content-Type": "application/json",
+      ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+    };
   }
-  skillCache[mode] = { text, fetchedAt: Date.now() };
-  return text;
-}
 
-// ─── app URL ───────────────────────────────────────────────────────────────
+  private normalise(data: ApiRecord): ThinkletMeta {
+    return {
+      id: data.id,
+      title: data.title,
+      description: data.description,
+      tags: data.tags ?? [],
+      visibility: (data.visibility as Visibility) ?? "private",
+      createdAt: data.createdAt ?? data.created_at ?? new Date().toISOString(),
+      platformUrl: data.platformUrl ?? data.platform_url,
+      thumbnailUrl: data.thumbnailUrl,
+      publicationId: data.publicationId ?? data.publication_id,
+      score: data.score,
+    };
+  }
 
-/**
- * Build the user-facing app URL for a thinklet.
- * Uses backend-provided `platformUrl` when available, otherwise constructs
- * it client-side from THINKLET_APP_URL.
- * For public thinklets, the feed URL needs the publication ID, not the thinklet ID.
- */
-export function buildAppUrl(
-  id: string,
-  visibility: Visibility,
-  backendUrl?: string,
-  publicationId?: string,
-): string {
-  if (backendUrl) return backendUrl;
-  if (visibility === "public" && publicationId) return `${APP_BASE_URL}/feed?id=${publicationId}`;
-  return `${APP_BASE_URL}/thinklets?id=${id}`;
-}
-
-// ─── set visibility ────────────────────────────────────────────────────────
-
-export async function setVisibility(
-  id: string,
-  visibility: Visibility
-): Promise<ThinkletMeta> {
-  const res = await fetch(
-    `${MCP_BASE}/thinklets/${id}/visibility`,
-    {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify({ visibility }),
+  private async unwrap<T>(res: Response, label: string): Promise<T> {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) throw new AuthError();
+      const err = await res.text();
+      throw new Error(`${label} failed (${res.status}): ${err}`);
     }
-  );
-  return normalise(await unwrap<ApiRecord>(res, "Thinklet visibility"));
+    const json = (await res.json()) as Record<string, unknown>;
+    return ((json.data as T) ?? json) as T;
+  }
+
+  async createThinklet(payload: CreatePayload): Promise<ThinkletMeta> {
+    const res = await fetch(`${this.mcpBase}/thinklets`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({
+        code: payload.code,
+        title: payload.title,
+        description: payload.description,
+        tags: payload.tags ?? [],
+        integrations: payload.integrations ?? [],
+      }),
+    });
+    return this.normalise(await this.unwrap<ApiRecord>(res, "Thinklet create"));
+  }
+
+  async patchThinklet(payload: PatchPayload): Promise<ThinkletMeta> {
+    const res = await fetch(`${this.mcpBase}/thinklets`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify({
+        code: payload.code,
+        patchedFromId: payload.patchedFromId,
+        title: payload.title,
+        description: payload.description,
+        tags: payload.tags,
+        integrations: payload.integrations,
+      }),
+    });
+    return this.normalise(await this.unwrap<ApiRecord>(res, "Thinklet patch"));
+  }
+
+  async getThinklet(id: string): Promise<ThinkletMeta> {
+    const res = await fetch(`${this.mcpBase}/thinklets/${id}`, {
+      headers: this.headers(),
+    });
+    return this.normalise(await this.unwrap<ApiRecord>(res, "Thinklet fetch"));
+  }
+
+  async getThinkletCode(id: string): Promise<string> {
+    const res = await fetch(`${this.mcpBase}/thinklets/${id}/code`, {
+      headers: this.headers(),
+    });
+    const data = await this.unwrap<{ code: string }>(res, "Thinklet code fetch");
+    return data.code;
+  }
+
+  async searchThinklets(
+    query: string,
+    limit = 5,
+    includePrivate = true
+  ): Promise<ThinkletMeta[]> {
+    const params = new URLSearchParams({
+      q: query,
+      limit: String(limit),
+      includePrivate: String(includePrivate),
+    });
+    const res = await fetch(`${this.mcpBase}/thinklets/search?${params}`, {
+      headers: this.headers(),
+    });
+    const data = await this.unwrap<
+      { results?: ApiRecord[] } | ApiRecord[]
+    >(res, "Thinklet search");
+    const records = Array.isArray(data) ? data : (data.results ?? []);
+    return records.map((r) => this.normalise(r));
+  }
+
+  async fetchAccess(id: string, signal?: AbortSignal): Promise<AccessData> {
+    const res = await fetch(`${this.mcpBase}/thinklets/${id}/access`, {
+      headers: this.headers(),
+      signal,
+    });
+    return this.unwrap<AccessData>(res, "Thinklet access");
+  }
+
+  async fixThinklet(
+    id: string,
+    code: string,
+    title?: string,
+    description?: string,
+    tags?: string[],
+    integrations?: string[]
+  ): Promise<ThinkletMeta> {
+    return this.patchThinklet({ patchedFromId: id, code, title, description, tags, integrations });
+  }
+
+  async fetchSkill(mode: SkillMode): Promise<string> {
+    const cached = this.skillCache[mode];
+    if (cached && Date.now() - cached.fetchedAt < SKILL_TTL_MS) {
+      return cached.text;
+    }
+    const res = await fetch(`${this.mcpBase}/skill?mode=${mode}`, {
+      headers: this.headers(),
+    });
+    const data = await this.unwrap<{ skill: string; mode: string }>(
+      res,
+      "Skill fetch"
+    );
+    const text = (data.skill ?? "").trim();
+    if (!text) throw new Error("empty skill payload");
+    this.skillCache[mode] = { text, fetchedAt: Date.now() };
+    return text;
+  }
+
+  async setVisibility(id: string, visibility: Visibility): Promise<ThinkletMeta> {
+    const res = await fetch(`${this.mcpBase}/thinklets/${id}/visibility`, {
+      method: "PATCH",
+      headers: this.headers(),
+      body: JSON.stringify({ visibility }),
+    });
+    return this.normalise(
+      await this.unwrap<ApiRecord>(res, "Thinklet visibility")
+    );
+  }
+
+  buildAppUrl(
+    id: string,
+    visibility: Visibility,
+    backendUrl?: string,
+    publicationId?: string
+  ): string {
+    if (backendUrl) return backendUrl;
+    if (visibility === "public" && publicationId)
+      return `${this.appBaseUrl}/feed?id=${publicationId}`;
+    return `${this.appBaseUrl}/thinklets?id=${id}`;
+  }
+
+  buildEmbedUrl(token: string): string {
+    return `${this.contentBaseUrl}/embed/mcp?token=${encodeURIComponent(token)}`;
+  }
 }
