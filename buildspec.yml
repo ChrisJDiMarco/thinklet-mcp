@@ -19,7 +19,7 @@ phases:
   build:
     commands:
       - echo Building Docker image...
-      - docker build -t $REPO_URI:$IMAGE_TAG -t $IMAGE_URI .
+      - docker build --platform linux/amd64 -t $REPO_URI:$IMAGE_TAG -t $IMAGE_URI .
       - echo Build completed
 
   post_build:
