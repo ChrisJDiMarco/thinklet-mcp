@@ -1,5 +1,5 @@
 # ─── Stage 1: build ───────────────────────────────────────────────────────────
-FROM --platform=linux/arm64 node:20-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -9,7 +9,7 @@ COPY . .
 RUN npm run build
 
 # ─── Stage 2: runtime ─────────────────────────────────────────────────────────
-FROM --platform=linux/arm64 node:20-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 COPY package*.json ./
