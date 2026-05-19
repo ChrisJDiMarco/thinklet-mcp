@@ -17,7 +17,10 @@
  *     spec prohibits token passthrough to upstream APIs.
  *
  * Spec endpoints:
- *   GET /.well-known/oauth-protected-resource — RFC 9728 PRM document
+ *   GET /.well-known/oauth-protected-resource   — RFC 9728 PRM document
+ *   GET /.well-known/oauth-authorization-server — RFC 8414 AS metadata
+ *                                                 (Cognito endpoints + PKCE,
+ *                                                  which Cognito's own doc omits)
  *   POST /mcp                                 — MCP requests; 401 with WWW-Authenticate
  *                                               on missing/invalid token, 403 with
  *                                               insufficient_scope on missing scope
@@ -80,6 +83,10 @@ const MCP_SERVER_URL =
   process.env.MCP_SERVER_URL ?? "https://mcp.thinklet.io";
 const MCP_REQUIRED_SCOPE =
   process.env.MCP_REQUIRED_SCOPE ?? `${MCP_SERVER_URL}/mcp`;
+// Cognito hosted-UI / custom domain that serves the OAuth endpoints.
+const COGNITO_AUTH_DOMAIN = (
+  process.env.COGNITO_AUTH_DOMAIN ?? "https://auth.thinklet.io"
+).replace(/\/+$/, "");
 
 const COGNITO_ISSUER = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}`;
 
@@ -90,11 +97,36 @@ const JWKS = COGNITO_USER_POOL_ID
 
 const PROTECTED_RESOURCE_URL = `${MCP_SERVER_URL}/.well-known/oauth-protected-resource`;
 
+// authorization_servers points at THIS server (not the Cognito issuer) because
+// Cognito does not serve RFC 8414 metadata and its OIDC doc omits
+// `code_challenge_methods_supported`, which MCP clients require for PKCE. We
+// serve a complete RFC 8414 document ourselves (see AUTH_SERVER_METADATA).
 const PROTECTED_RESOURCE_METADATA = {
   resource: MCP_SERVER_URL,
-  authorization_servers: [COGNITO_ISSUER],
+  authorization_servers: [MCP_SERVER_URL],
   scopes_supported: [MCP_REQUIRED_SCOPE],
   bearer_methods_supported: ["header"],
+};
+
+// RFC 8414 Authorization Server Metadata. Mirrors Cognito's real OAuth
+// endpoints but adds the fields Cognito omits (notably
+// `code_challenge_methods_supported`). `issuer` must equal the URL this
+// document is fetched from (RFC 8414 §3.3) — it intentionally differs from the
+// token `iss` claim (still Cognito), which the resource server validates
+// separately in validateJwt().
+const AUTH_SERVER_METADATA = {
+  issuer: MCP_SERVER_URL,
+  authorization_endpoint: `${COGNITO_AUTH_DOMAIN}/oauth2/authorize`,
+  token_endpoint: `${COGNITO_AUTH_DOMAIN}/oauth2/token`,
+  jwks_uri: `${COGNITO_ISSUER}/.well-known/jwks.json`,
+  response_types_supported: ["code"],
+  grant_types_supported: ["authorization_code", "refresh_token"],
+  code_challenge_methods_supported: ["S256"],
+  token_endpoint_auth_methods_supported: [
+    "client_secret_basic",
+    "client_secret_post",
+  ],
+  scopes_supported: ["openid", "email", "profile", MCP_REQUIRED_SCOPE],
 };
 
 // ─── JWT validation ───────────────────────────────────────────────────────────
@@ -182,6 +214,12 @@ function startHttpServer() {
     if (pathname === "/.well-known/oauth-protected-resource") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(PROTECTED_RESOURCE_METADATA));
+      return;
+    }
+
+    if (pathname === "/.well-known/oauth-authorization-server") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(AUTH_SERVER_METADATA));
       return;
     }
 

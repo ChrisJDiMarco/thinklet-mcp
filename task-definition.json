@@ -54,6 +54,10 @@
         {
           "name": "MCP_REQUIRED_SCOPE",
           "value": "https://mcp.thinklet.io/mcp"
+        },
+        {
+          "name": "COGNITO_AUTH_DOMAIN",
+          "value": "https://auth.thinklet.io"
         }
       ],
       "secrets": [
