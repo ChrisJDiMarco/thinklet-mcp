@@ -71,14 +71,12 @@ function authErrorResponse() {
       {
         type: "text" as const,
         text: [
-          `🔑 **Thinklet API key missing or invalid.**`,
+          `🔑 **Your Thinklet session has expired or is invalid.**`,
           ``,
-          `To use Thinklet tools you need an API key:`,
-          `1. Go to **https://app.thinklet.io** and sign in`,
-          `2. Open **Settings → MCP Keys**`,
-          `3. Generate a key and add it to your connector config as \`THINKLET_API_KEY\``,
+          `Re-connect your Thinklet account:`,
+          `Claude.ai → Settings → Connectors → Thinklet → Reconnect.`,
           ``,
-          `Once added, restart the connector and try again.`,
+          `Once reconnected, try again.`,
         ].join("\n"),
       },
     ],
@@ -120,7 +118,7 @@ function summaryText(meta: ThinkletMeta) {
 function visibilityExplainer(visibility: string): string {
   const map: Record<string, string> = {
     public: "🌐 **Public** — indexed in the catalog, any AI can find and remix it",
-    private: "🔒 **Private** — only you can access it via your API key",
+    private: "🔒 **Private** — only you can access it",
   };
   return map[visibility] ?? map.private;
 }
@@ -208,6 +206,7 @@ export function createMcpServer(api: ApiClient): McpServer {
           "Include full usage docs for the specified integrations (default false)"
         ),
     },
+    { title: "List integrations", readOnlyHint: true },
     async ({ ids, includeDocs }) => {
       if (ids && ids.length > 0 && includeDocs) {
         const docs = getIntegrationDocs(ids);
@@ -257,6 +256,7 @@ export function createMcpServer(api: ApiClient): McpServer {
           "Integration IDs the user confirmed. Pass `[]` if the user explicitly declined all integrations."
         ),
     },
+    { title: "Confirm integrations", readOnlyHint: true },
     async ({ ids }) => {
       if (!buildFlow.discovered) {
         return {
@@ -406,6 +406,7 @@ export function createMcpServer(api: ApiClient): McpServer {
           "Include your own private thinklets in results after public matches (default true)"
         ),
     },
+    { title: "Discover thinklets", readOnlyHint: true },
     async ({ query, limit, includePrivate }) => {
       const recommended = matchTriggers(query);
       buildFlow.recommendedIntegrations = recommended.map((r) => r.id);
@@ -677,6 +678,7 @@ export function createMcpServer(api: ApiClient): McpServer {
             "Integration IDs used in this thinklet (from `confirm_integrations`), e.g. ['image-generation', 'ai-api']"
           ),
       },
+      annotations: { title: "Save Thinklet", destructiveHint: false },
       _meta: { ui: { resourceUri: VIEWER_RESOURCE_URI } },
     },
     async ({ code, title, description: rawDesc, tags, integrations }) => {
@@ -800,6 +802,7 @@ export function createMcpServer(api: ApiClient): McpServer {
           .optional()
           .describe("Also fetch and return the source code (default false)"),
       },
+      annotations: { title: "Get Thinklet", readOnlyHint: true },
       _meta: { ui: { resourceUri: VIEWER_RESOURCE_URI } },
     },
     async ({ id, includeCode }) => {
@@ -911,6 +914,7 @@ export function createMcpServer(api: ApiClient): McpServer {
             "Updated integration IDs (optional — keeps existing if omitted). Use to add integrations post-creation."
           ),
       },
+      annotations: { title: "Fix Thinklet", destructiveHint: true },
       _meta: { ui: { resourceUri: VIEWER_RESOURCE_URI } },
     },
     async ({ id, code, title: rawTitle, description: rawDesc, tags, integrations }) => {
@@ -1006,6 +1010,7 @@ export function createMcpServer(api: ApiClient): McpServer {
           .enum(["public", "private"])
           .describe("public = indexed in catalog, private = only you"),
       },
+      annotations: { title: "Publish Thinklet", destructiveHint: true },
       _meta: { ui: { resourceUri: VIEWER_RESOURCE_URI } },
     },
     async ({ id, visibility }) => {

@@ -34,6 +34,32 @@
         {
           "name": "THINKLET_CONTENT_URL",
           "value": "https://content.thinklet.io"
+        },
+        {
+          "name": "COGNITO_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "COGNITO_USER_POOL_ID",
+          "value": "us-east-1_RBHSAVbb8"
+        },
+        {
+          "name": "COGNITO_CLIENT_ID",
+          "value": "2u6osdj50d3quhsjjdacljgo3"
+        },
+        {
+          "name": "MCP_SERVER_URL",
+          "value": "https://mcp.thinklet.io"
+        },
+        {
+          "name": "MCP_REQUIRED_SCOPE",
+          "value": "https://mcp.thinklet.io/mcp"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "MCP_SERVICE_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:891612574251:parameter/thinklet/prod/mcp/MCP_SERVICE_KEY"
         }
       ],
       "logConfiguration": {

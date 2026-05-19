@@ -2,8 +2,9 @@
  * Thinklet API client.
  *
  * ApiClient is instantiated per-session (HTTP mode) or once at startup (stdio mode),
- * holding the API key for that user. All network calls are instance methods so the
- * key is never a global.
+ * holding the Cognito `sub` of the authenticated user. Backend calls send a shared
+ * service credential (MCP_SERVICE_KEY) plus the user's sub in X-Thinklet-User-Sub —
+ * the MCP OAuth spec prohibits forwarding the user's JWT to upstream APIs.
  */
 
 const API_URL = process.env.THINKLET_API_URL ?? "https://api.thinklet.io";
@@ -12,12 +13,13 @@ const CONTENT_BASE_URL =
 const APP_BASE_URL = (
   process.env.THINKLET_APP_URL ?? "https://app.thinklet.io"
 ).replace(/\/+$/, "");
+const MCP_SERVICE_KEY = process.env.MCP_SERVICE_KEY ?? "";
 
 // ─── Sentinel error ────────────────────────────────────────────────────────
 
 export class AuthError extends Error {
   constructor() {
-    super("missing_or_invalid_api_key");
+    super("missing_or_invalid_token");
     this.name = "AuthError";
   }
 }
@@ -86,25 +88,27 @@ const SKILL_TTL_MS = 60 * 60 * 1000;
 // ─── Client ────────────────────────────────────────────────────────────────
 
 export class ApiClient {
-  private readonly apiKey: string;
+  private readonly userSub: string;
   private readonly mcpBase: string;
   private readonly appBaseUrl: string;
   private readonly contentBaseUrl: string;
   private readonly skillCache: Record<SkillMode, SkillCacheEntry | undefined> =
     { create: undefined, edit: undefined };
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
+  constructor(userSub: string) {
+    this.userSub = userSub;
     this.mcpBase = `${API_URL}/mcp`;
     this.appBaseUrl = APP_BASE_URL;
     this.contentBaseUrl = CONTENT_BASE_URL;
   }
 
   private headers() {
-    return {
+    const h: Record<string, string> = {
       "Content-Type": "application/json",
-      ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
     };
+    if (MCP_SERVICE_KEY) h["Authorization"] = `Bearer ${MCP_SERVICE_KEY}`;
+    if (this.userSub) h["X-Thinklet-User-Sub"] = this.userSub;
+    return h;
   }
 
   private normalise(data: ApiRecord): ThinkletMeta {
