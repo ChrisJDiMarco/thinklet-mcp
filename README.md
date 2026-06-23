@@ -1,4 +1,4 @@
-# thinklet-mcp
+# thinklet-mcp 
 
 > The MCP server that connects any AI to the Thinklet platform.
 
@@ -202,4 +202,4 @@ thinklet-mcp/
 
 [Logic Out Loud LLC](https://thinklet.io) · [app.thinklet.io](https://app.thinklet.io) · Powered by Claude
 
-⭐ **If this clicks for you, a star helps a lot.**
+⭐ **If this clicks for you, a star helps a lots.**
